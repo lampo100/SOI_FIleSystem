@@ -24,12 +24,12 @@ typedef uint16_t WORD;
 
 typedef struct Block{
     char data[BLOCK_SIZE];
-    struct block *next_block;
+    WORD next_dblock_index;
 } BLOCK;
 
 typedef struct INode{
     char name[MAX_NAME_LENGTH];
-    WORD size;
+    unsigned long int size;
     WORD dblock_index;
 } INODE;
 
