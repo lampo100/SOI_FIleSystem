@@ -317,7 +317,66 @@ int display_main_catalog(const char *filename){
     return 0;
 }
 
-int delete_file(const char *filename){
+int delete_file(const char *filename, const char *virtual_disk_name){
+    FILE *handler;
+    SYSPOINT pointers;
+    BLOCK *temp_block;
+    WORD inode_index, dblock_index, i;
+
+    if(!(handler = fopen(virtual_disk_name, "r+b"))){
+        printf("rm: blad otwierania bazy danych\n");
+        return errno;
+    }
+
+    if((allocate_system_pointers(handler, &pointers))!= 0){
+        printf("rm: blad czytania struktur informacyjnych\n");
+        fclose(handler);
+        return errno;
+    }
+    if((inode_index = find_file_on_disk(filename ,&pointers, handler)) == MAX_FILES_NUMBER){
+        printf("rm: nie ma takiego pliku\n");
+        fclose(handler);
+        free_system_pointers(&pointers);
+        return errno;
+    }
+    //Czytamy inode do usunięcia
+    fseek(handler, calculate_inode_offset(inode_index, &pointers), SEEK_SET);
+    if((fread(pointers.temp_inode, sizeof(INODE), 1, handler)) != 1){
+        printf("rm: nie mozna odczytac inode'a pliku\n");
+        fclose(handler);
+        free_system_pointers(&pointers);
+        return errno;
+    }
+    rewind(handler);
+    //Zaznaczamy na bitmapie inode'ow ze inode jest wolny
+    pointers.inode_bmp[inode_index] = 0;
+
+    //Czytamy gdzie zaczynaja się dane tego pliku
+    dblock_index = pointers.temp_inode->dblock_index;
+
+    temp_block = calloc(1, sizeof(BLOCK));
+
+    for(i = dblock_index; i < pointers.superblock->dblock_count; i = temp_block->next_dblock_index){
+        fseek(handler, calculate_dblock_offset(i, &pointers), SEEK_SET);
+
+        if((fread(temp_block, sizeof(BLOCK),1,handler))!=1){
+            printf("rm: blad czytania danych z dysku.\n");
+            fclose(handler);
+            free_system_pointers(&pointers);
+            free(temp_block);
+            return errno;
+        }
+        pointers.dblocks_bmp[i] = 0;
+        pointers.superblock->free_dblocks++;
+        pointers.superblock->full_dblocks--;
+    }
+
+    update_disk_data(handler, &pointers);
+
+    free(temp_block);
+    fclose(handler);
+    free_system_pointers(&pointers);
+    printf("rm: plik usunieto\n");
     return 0;
 }
 
@@ -462,6 +521,7 @@ int allocate_system_pointers(FILE *handler, SYSPOINT *sys_pointers) {
         printf("Nie mozna zaalokowac pamieci na inode'a.\n");
         return errno;
     }
+    rewind(handler);
     return 0;
 }
 

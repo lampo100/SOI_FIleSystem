@@ -45,5 +45,29 @@ int main(){
     map_virtual_disk("test");
     display_main_catalog("test");
 
+    delete_file("all", "test");
+    display_virtual_disk_info("test");
+    map_virtual_disk("test");
+    display_main_catalog("test");
 
+    delete_file("agg","test");
+    display_virtual_disk_info("test");
+    map_virtual_disk("test");
+    display_main_catalog("test");
+
+    copy_to_virtual_disk("a", "test");
+    copy_to_virtual_disk("b", "test");
+    display_virtual_disk_info("test");
+    map_virtual_disk("test");
+    display_main_catalog("test");
+
+    delete_file("a", "test");
+    display_virtual_disk_info("test");
+    map_virtual_disk("test");
+    display_main_catalog("test");
+
+    copy_to_virtual_disk("c", "test");
+    display_virtual_disk_info("test");
+    map_virtual_disk("test");
+    display_main_catalog("test");
 }

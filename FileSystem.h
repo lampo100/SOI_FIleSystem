@@ -53,7 +53,7 @@ int create_virtual_disk(const char *filename, WORD size);
 int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name);
 int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name);
 int display_main_catalog(const char *filename);
-int delete_file(const char *filename);
+int delete_file(const char *filename, const char *virtual_disk_name);
 int delete_virtual_disk(const char *filename);
 int map_virtual_disk(const char *filename);
 
