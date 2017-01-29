@@ -19,7 +19,7 @@
 #define INODE_BMP_ADRESS sizeof(SUPERBLOCK)
 #define DBLOCKS_BMP_ADRESS sizeof(SUPERBLOCK) + sizeof(char)*MAX_FILES_NUMBER
 
-typedef uint16_t WORD;
+typedef uint32_t WORD;
 
 
 typedef struct Block{
@@ -49,7 +49,7 @@ typedef struct SystemPointers{
     char *dblocks_bmp;
 } SYSPOINT;
 
-int create_virtual_disk(const char *filename, WORD size);
+int create_virtual_disk(const char *filename, unsigned long size);
 int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name);
 int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name);
 int display_main_catalog(const char *filename);
@@ -57,7 +57,7 @@ int delete_file(const char *filename, const char *virtual_disk_name);
 int delete_virtual_disk(const char *filename);
 int map_virtual_disk(const char *filename);
 
-WORD convert_size_to_blocks(long size);
+WORD convert_size_to_blocks(unsigned long size);
 int update_disk_data(FILE *file_handler, SYSPOINT *pointers);
 unsigned long int get_file_size(FILE *file_handler);
 int check_if_file_exists(char *filename, FILE *disk_handler);

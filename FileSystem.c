@@ -4,11 +4,11 @@
 #include <errno.h>
 #include "FileSystem.h"
 
-int create_virtual_disk(const char *filename, WORD size) {
+int create_virtual_disk(const char *filename, unsigned long size) {
     SYSPOINT pointers;
     FILE *file_handler;
     WORD total_data_blocks_needed;
-    WORD total_disk_size;
+    unsigned long total_disk_size;
     WORD information_region_size;
 
     total_data_blocks_needed = convert_size_to_blocks(size);
@@ -81,13 +81,113 @@ int create_virtual_disk(const char *filename, WORD size) {
     }
 
 
-    printf("Utworzono dysk wirtualny o nazwie: '%s' i pojemnosci: %uB\n", pointers.superblock->disk_name,
+    printf("Utworzono dysk wirtualny o nazwie: '%s' i pojemnosci: %luB\n", pointers.superblock->disk_name,
            total_disk_size);
 
     fclose(file_handler);
     free(pointers.superblock);
     free(pointers.dblocks_bmp);
-    return total_disk_size;
+    return 0;
+}
+
+int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
+    FILE *virtual_handler, *physical_handler;
+    SYSPOINT pointers;
+    BLOCK *temp;
+    WORD  file_dblocks_count, inode_index, dblock_index;
+    unsigned long int file_size, block_modulo;
+    int i;
+
+    if(!(virtual_handler = fopen(virtual_disk_name, "rb"))){
+        printf("cpp: blad otwierania dysku\n");
+        return errno;
+    }
+
+    if((allocate_system_pointers(virtual_handler, &pointers))!= 0){
+        printf("cpp: blad czytania struktur informacyjnych\n");
+        fclose(virtual_handler);
+        return errno;
+    }
+
+    inode_index = find_file_on_disk(filename, &pointers, virtual_handler);
+    if(inode_index == MAX_FILES_NUMBER){
+        printf("cpp: plik nie istnieje\n");
+        fclose(virtual_handler);
+        free_system_pointers(&pointers);
+        return errno;
+    }
+    //Plik istnieje na dysku wirtualnym więc tworzymy jego odpowiednik na dysku fizycznym
+    if(!(physical_handler = fopen(filename, "w+b"))) {
+        printf("cpp: blad otwierania pliku do kopiowania\n");
+        fclose(virtual_handler);
+        free_system_pointers(&pointers);
+        return errno;
+    }
+
+    //Znaleźliśmy inode pliku i przechodzimy do jego czytania
+    fseek(virtual_handler, calculate_inode_offset(inode_index, &pointers), SEEK_SET);
+    if((fread(pointers.temp_inode, sizeof(INODE), 1, virtual_handler)) != 1){
+        printf("cpp: blad czytania inode'a pliku\n");
+        fclose(virtual_handler);
+        fclose(physical_handler);
+        free_system_pointers(&pointers);
+        return errno;
+    }
+    rewind(virtual_handler);
+
+    //Czytamy rozmiar pliku do przekopiowania
+    file_size = pointers.temp_inode->size;
+    //Obliczamy ile bloków danych zajmuje plik
+    file_dblocks_count = convert_size_to_blocks(file_size);
+    //Czytamy indeks pierwszego bloku danych pliku
+    dblock_index = pointers.temp_inode->dblock_index;
+    //Obliczamy ile bajtow w ostatnim bloku zajmuje plik
+    block_modulo = file_size % BLOCK_SIZE;
+    temp = (BLOCK *)malloc(sizeof(BLOCK));
+
+
+    for(i = 0; i < file_dblocks_count; ++i){
+        fseek(virtual_handler, calculate_dblock_offset(dblock_index, &pointers), SEEK_SET);
+        if((fread(temp,sizeof(BLOCK),1,virtual_handler))!=1){
+            printf("cpp: blad czytania danych z wirtualnego dysku\n");
+            fclose(virtual_handler);
+            fclose(physical_handler);
+            free_system_pointers(&pointers);
+            free(temp);
+            return errno;
+        }
+
+        if(i+1 == file_dblocks_count){
+            fseek(physical_handler, 0, SEEK_END);
+            if((fwrite(temp->data,sizeof(char),block_modulo,physical_handler))!=block_modulo){
+                printf("cpp: blad zapisywania danych z wirtualnego dysku\n");
+                fclose(virtual_handler);
+                fclose(physical_handler);
+                free_system_pointers(&pointers);
+                free(temp);
+                return errno;
+            }
+        }else{
+            fseek(physical_handler, 0, SEEK_END);
+            if((fwrite(temp->data,BLOCK_SIZE, 1,physical_handler)) != 1){
+                printf("cpp: blad zapisywania danych z wirtualnego dysku\n");
+                fclose(virtual_handler);
+                fclose(physical_handler);
+                free_system_pointers(&pointers);
+                free(temp);
+                return errno;
+            }
+        }
+        dblock_index = temp->next_dblock_index;
+
+    }
+
+
+    free(temp);
+    fclose(virtual_handler);
+    fclose(physical_handler);
+    free_system_pointers(&pointers);
+    return errno;
 }
 
 int update_disk_data(FILE *file_handler, SYSPOINT *pointers){
@@ -380,7 +480,6 @@ int delete_file(const char *filename, const char *virtual_disk_name){
     return 0;
 }
 
-
 int delete_virtual_disk(const char *filename){
     if (unlink(filename) == -1){
         printf("Blad usuwania systemu plikow.\n");
@@ -436,7 +535,7 @@ unsigned long int get_file_size(FILE *file_handler){
     return size;
 }
 
-WORD convert_size_to_blocks(long size) {
+WORD convert_size_to_blocks(unsigned long size) {
     return (size % BLOCK_SIZE == 0) ? (WORD) (size / BLOCK_SIZE) : (WORD) (size / BLOCK_SIZE + 1);
 }
 
