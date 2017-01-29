@@ -3,92 +3,67 @@
 //
 #include "FileSystem.h"
 
-int main(){
-  //  printf("sizeof(SUPERBLOCK) = %lu\n",sizeof(SUPERBLOCK));
- //   printf("sizeof(INODE) = %lu\n",sizeof(INODE));
-   // printf("sizeof(BLOCK) = %lu\n",sizeof(BLOCK));
+void print_description(void){
+    printf("STRESZCZENIE\n");
+    printf("\t./FileSystem OPCJA [DYSK] [ARGUMENT]\n");
+    printf("OPIS\n");
+    printf("\tProgram wykonujacy rozne czynnosci zwiazanie z tworzeniem i zarzadzaniem dyskami wirtualnymi.");
+    printf("\n\n-mk");
+    printf("\n\tUtworz dysk wirtualny o podanej nazwie i o podanym rozmiarze na dane");
+    printf("\n-cv");
+    printf("\n\tKopiuj plik o podanej nazwie z dysku fizycznego na dysk wirtualny");
+    printf("\n-cp");
+    printf("\n\tKopiuj plik o podanej nazwie z dysku wirtualnego na dysk fizyczny");
+    printf("\n-ls");
+    printf("\n\tWyswietl zawartosc katalogu glownego");
+    printf("\n-rm");
+    printf("\n\tUsun z dysku wirtualnego plik o podanej nazwie");
+    printf("\n-dt");
+    printf("\n\tUsun podany dysk wirtualny wraz z jego zawartoscia");
+    printf("\n-mp");
+    printf("\n\tWyswietl szczegolowe mapowanie dysku wirtualnego");
+    printf("\n-i");
+    printf("\n\tWyswietl ogolne parametry dysku\n");
+}
 
-  //  printf("%u %u %u %u",convert_size_to_blocks(0),convert_size_to_blocks(1)
- //   ,convert_size_to_blocks(2049), convert_size_to_blocks(2048));
-   /* create_virtual_disk("test",2049);
-    display_virtual_disk_info("test");*/
+int main(int argc, char *argv[]){
+    if(argc<3) {
+        print_description();
+        return 0;
+    }
+    char option[4];
+    char disk[24];
+    char argument[24];
+    strcpy(option, argv[1]);
+    strcpy(disk, argv[2]);
+    if(argc == 4)
+        strcpy(argument, argv[3]);
+    if(!(strcmp(option, "-mk"))){
+        create_virtual_disk(disk, (unsigned long)atoi(argument));
 
-    //strcpy(pointers.superblock->disk_name, "sdsds");
-    //pointers.superblock->size = 22;
-    //pointers.superblock->free_dblocks = 999;
-   // update_disk_data(handler, &pointers);
-   // display_virtual_disk_info("test");
-  /*
-    map_virtual_disk("test");
-    display_main_catalog("test");
-    copy_to_virtual_disk("agg", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-cv"))){
+        copy_to_virtual_disk(argument, disk);
 
-    copy_to_virtual_disk("all", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-cp"))){
+        copy_from_virtual_disk(argument, disk);
 
-    copy_to_virtual_disk("bla", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-ls"))){
+        display_main_catalog(disk);
 
-    copy_to_virtual_disk("malpka", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-rm"))){
+        delete_file(argument, disk);
 
-    copy_to_virtual_disk("mniejszy", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-dt"))){
+        delete_virtual_disk(disk);
 
-    delete_file("all", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-mp"))){
+        map_virtual_disk(disk);
 
-    delete_file("agg","test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
+    }else if(!(strcmp(option, "-i"))){
+        display_virtual_disk_info(disk);
 
-    copy_to_virtual_disk("a", "test");
-    copy_to_virtual_disk("b", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
-
-    delete_file("a", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");
-
-    copy_to_virtual_disk("c", "test");
-    display_virtual_disk_info("test");
-    map_virtual_disk("test");
-    display_main_catalog("test");*/
-    //display_main_catalog("test");
-    //copy_from_virtual_disk("b","test");
-   // create_virtual_disk("test_image_disk", 1542180);
-  //  map_virtual_disk("test_image_disk");
- //   copy_to_virtual_disk("img1.jpg", "test_image_disk");
-   // map_virtual_disk("test_image_disk");
-  //  copy_from_virtual_disk("img1.jpg", "test_image_disk");
-  //  create_virtual_disk("test", 32472580);
- //   map_virtual_disk("test");
-  //  copy_to_virtual_disk("img1","test");
-  //  copy_to_virtual_disk("obr","test");
-   // copy_to_virtual_disk("obraz.bmp","test");
-
-    //   display_main_catalog("test");
- //   map_virtual_disk("test");
-     copy_from_virtual_disk("obraz.bmp", "test");
-    copy_from_virtual_disk("obr", "test");
-    copy_from_virtual_disk("img1", "test");
-
-
+    }else{
+        print_description();
+    }
+    return 0;
 }

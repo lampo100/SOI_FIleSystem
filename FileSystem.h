@@ -36,7 +36,7 @@ typedef struct INode{
 typedef struct SuperBlock{
     char disk_name[MAX_NAME_LENGTH];
     WORD size;
-    WORD inode_count;
+    unsigned long used_space;
     WORD dblock_count;
     WORD free_dblocks;
     WORD full_dblocks;
@@ -60,11 +60,7 @@ int map_virtual_disk(const char *filename);
 WORD convert_size_to_blocks(unsigned long size);
 int update_disk_data(FILE *file_handler, SYSPOINT *pointers);
 unsigned long int get_file_size(FILE *file_handler);
-int check_if_file_exists(char *filename, FILE *disk_handler);
 WORD find_file_on_disk(const char *filename, SYSPOINT *pointers, FILE *handler);
-WORD free_dblocks_count(FILE *disk_handler);
-size_t getIndexOfFirstFreeInode(char *inode_bmp);
-void read_information_region(FILE *file_handler,SUPERBLOCK *superblock, char *inode_bmp, char *dblocks_bmp);
 int display_virtual_disk_info(char *filename);
 int allocate_system_pointers(FILE *handler, SYSPOINT *sys_pointers);
 void free_system_pointers(SYSPOINT *pointers);
@@ -73,7 +69,4 @@ WORD find_first_taken_inode(SYSPOINT *pointers);
 WORD calculate_inode_offset(WORD index, SYSPOINT *pointers);
 WORD find_first_free_dblock(SYSPOINT *pointers);
 WORD calculate_dblock_offset(WORD index, SYSPOINT *pointers);
-
-void aaa(const char *filename);
-void bbb(const char *filename);
 #endif //FILESYSTEM_FILESYSTEM_H

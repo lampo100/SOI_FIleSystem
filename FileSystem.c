@@ -12,7 +12,10 @@ int create_virtual_disk(const char *filename, unsigned long size) {
     WORD information_region_size;
 
     total_data_blocks_needed = convert_size_to_blocks(size);
-
+    if(size == 0){
+        printf("mk: proba utworzenia pustego dysku\n");
+        return errno;
+    }
     //Superblok + bitmapa inode'ów + bitmapa bloków danych + bloki danych
     information_region_size = (WORD) sizeof(SUPERBLOCK) + (WORD) sizeof(pointers.inode_bmp)
                               + (WORD) (total_data_blocks_needed * sizeof(char))
@@ -25,17 +28,17 @@ int create_virtual_disk(const char *filename, unsigned long size) {
     /*            Tworzenie dysku                                  */
     file_handler = fopen(filename, "w+b");
     if (!file_handler) {
-        printf("Nie mozna bylo utworzyc dysku wirtualnego.\n");
+        printf("mk: nie mozna bylo utworzyc dysku wirtualnego\n");
         return 1;
     }
     if (strlen(filename) >= MAX_NAME_LENGTH) {
-        printf("Utworzenie dysku nie powiodlo sie. Za dluga nazwa.\n");
+        printf("mk: utworzenie dysku nie powiodlo sie. Za dluga nazwa\n");
         fclose(file_handler);
         return 1;
     }
 
     if (truncate(filename, total_disk_size)){
-        printf("Zmiana rozmiaru dysku do docelowy nie udala sie.\n");
+        printf("mk: zmiana rozmiaru dysku do docelowy nie udala sie\n");
         return errno;
     }
     file_handler = fopen(filename, "r+b");
@@ -47,14 +50,14 @@ int create_virtual_disk(const char *filename, unsigned long size) {
     memset(pointers.inode_bmp, 0, MAX_FILES_NUMBER);
 
     if (!pointers.superblock) {
-        printf("Blad. Nie mozna bylo zarezerwowac pamieci na superblok dysku!\n");
+        printf("mk: blad rezerwowania pamieci na superblok dysku\n");
         fclose(file_handler);
         return 2;
     }
 
     strncpy(pointers.superblock->disk_name, filename, 24);
     pointers.superblock->size = total_disk_size;
-    pointers.superblock->inode_count = MAX_FILES_NUMBER;
+    pointers.superblock->used_space = 0;
     pointers.superblock->dblock_count = total_data_blocks_needed;
     // niemożliwa wartość oznaczająca brak zajętych inode'ów
     pointers.superblock->free_dblocks = total_data_blocks_needed;
@@ -62,27 +65,27 @@ int create_virtual_disk(const char *filename, unsigned long size) {
 
     rewind(file_handler);
     if (fwrite(pointers.superblock, sizeof(SUPERBLOCK), 1, file_handler) != 1) {
-        printf("Blad. Nie mozna bylo zapisac superbloku na dysku. Proba utworzenia dysku nie powiodla sie!\n");
+        printf("mk: blad zapisania superbloku dysku, proba utworzenia dysku nie powiodla sie\n");
         fclose(file_handler);
         return 3;
     }
 
     fseek(file_handler, INODE_BMP_ADRESS, SEEK_SET);
     if (fwrite(&pointers.inode_bmp, sizeof(pointers.inode_bmp), 1, file_handler) != 1) {
-        printf("Blad. Nie mozna bylo zapisac bitmapy inode'ów na dysku. Proba utworzenia dysku nie powiodla sie!\n");
+        printf("mk: blad zapisania bitmapy inode'ów na dysku, proba utworzenia dysku nie powiodla sie\n");
         fclose(file_handler);
         return 3;
     }
     fseek(file_handler, INODE_BMP_ADRESS + sizeof(pointers.inode_bmp), SEEK_SET);
     if (fwrite(pointers.dblocks_bmp, sizeof(pointers.dblocks_bmp), 1, file_handler) != 1) {
-        printf("Blad. Nie mozna bylo zapisac bitmapy danych na dysku. Proba utworzenia dysku nie powiodla sie!\n");
+        printf("mk: blad zapisania bitmapy blokow danych na dysku, proba utworzenia dysku nie powiodla sie\n");
         fclose(file_handler);
         return 3;
     }
 
 
-    printf("Utworzono dysk wirtualny o nazwie: '%s' i pojemnosci: %luB\n", pointers.superblock->disk_name,
-           total_disk_size);
+    printf("Utworzono dysk wirtualny o nazwie: '%s' rozmiarze: %luB pojemnosci: %luB\n", pointers.superblock->disk_name,
+           total_disk_size, (unsigned long)pointers.superblock->dblock_count*BLOCK_SIZE);
 
     fclose(file_handler);
     free(pointers.superblock);
@@ -99,26 +102,26 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
     int i;
 
     if(!(virtual_handler = fopen(virtual_disk_name, "rb"))){
-        printf("cpp: blad otwierania dysku\n");
+        printf("cp: blad otwierania dysku\n");
         return errno;
     }
 
     if((allocate_system_pointers(virtual_handler, &pointers))!= 0){
-        printf("cpp: blad czytania struktur informacyjnych\n");
+        printf("cp: blad czytania struktur informacyjnych\n");
         fclose(virtual_handler);
         return errno;
     }
 
     inode_index = find_file_on_disk(filename, &pointers, virtual_handler);
     if(inode_index == MAX_FILES_NUMBER){
-        printf("cpp: plik nie istnieje\n");
+        printf("cp: plik nie istnieje\n");
         fclose(virtual_handler);
         free_system_pointers(&pointers);
         return errno;
     }
     //Plik istnieje na dysku wirtualnym więc tworzymy jego odpowiednik na dysku fizycznym
     if(!(physical_handler = fopen(filename, "w+b"))) {
-        printf("cpp: blad otwierania pliku do kopiowania\n");
+        printf("cp: blad otwierania pliku do kopiowania\n");
         fclose(virtual_handler);
         free_system_pointers(&pointers);
         return errno;
@@ -127,7 +130,7 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
     //Znaleźliśmy inode pliku i przechodzimy do jego czytania
     fseek(virtual_handler, calculate_inode_offset(inode_index, &pointers), SEEK_SET);
     if((fread(pointers.temp_inode, sizeof(INODE), 1, virtual_handler)) != 1){
-        printf("cpp: blad czytania inode'a pliku\n");
+        printf("cp: blad czytania inode'a pliku\n");
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -149,7 +152,7 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
     for(i = 0; i < file_dblocks_count; ++i){
         fseek(virtual_handler, calculate_dblock_offset(dblock_index, &pointers), SEEK_SET);
         if((fread(temp,sizeof(BLOCK),1,virtual_handler))!=1){
-            printf("cpp: blad czytania danych z wirtualnego dysku\n");
+            printf("cp: blad czytania danych z wirtualnego dysku\n");
             fclose(virtual_handler);
             fclose(physical_handler);
             free_system_pointers(&pointers);
@@ -160,7 +163,7 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
         if(i+1 == file_dblocks_count){
             fseek(physical_handler, 0, SEEK_END);
             if((fwrite(temp->data,sizeof(char),block_modulo,physical_handler))!=block_modulo){
-                printf("cpp: blad zapisywania danych z wirtualnego dysku\n");
+                printf("cp: blad zapisywania danych z wirtualnego dysku\n");
                 fclose(virtual_handler);
                 fclose(physical_handler);
                 free_system_pointers(&pointers);
@@ -170,7 +173,7 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
         }else{
             fseek(physical_handler, 0, SEEK_END);
             if((fwrite(temp->data,BLOCK_SIZE, 1,physical_handler)) != 1){
-                printf("cpp: blad zapisywania danych z wirtualnego dysku\n");
+                printf("cp: blad zapisywania danych z wirtualnego dysku\n");
                 fclose(virtual_handler);
                 fclose(physical_handler);
                 free_system_pointers(&pointers);
@@ -187,6 +190,7 @@ int copy_from_virtual_disk(const char *filename, const char* virtual_disk_name){
     fclose(virtual_handler);
     fclose(physical_handler);
     free_system_pointers(&pointers);
+    printf("skopiowano plik '%s'",filename);
     return errno;
 }
 
@@ -226,18 +230,18 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
     unsigned long int file_size;
 
     if(!(virtual_handler = fopen(virtual_disk_name, "r+b"))){
-        printf("cp: blad otwierania dysku\n");
+        printf("cv: blad otwierania dysku\n");
         return errno;
     }
 
     if((allocate_system_pointers(virtual_handler, &pointers))!= 0){
-        printf("cp: blad czytania struktur informacyjnych\n");
+        printf("cv: blad czytania struktur informacyjnych\n");
         fclose(virtual_handler);
         return errno;
     }
 
     if(!(physical_handler = fopen(filename, "r"))) {
-        printf("cp: blad otwierania pliku do kopiowania\n");
+        printf("cv: blad otwierania pliku do kopiowania\n");
         fclose(virtual_handler);
         free_system_pointers(&pointers);
         return errno;
@@ -245,7 +249,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
 
     name_length = (WORD)strlen(filename);
     if(name_length >= MAX_NAME_LENGTH){
-        printf("cp: nazwa pliku jest za dluga (max: %d)\n",MAX_NAME_LENGTH);
+        printf("cv: nazwa pliku jest za dluga (max: %d)\n",MAX_NAME_LENGTH);
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -254,7 +258,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
 
     index = find_file_on_disk(filename, &pointers, virtual_handler);
     if(index != MAX_FILES_NUMBER){
-        printf("cp: plik istnieje juz na dysku\n");
+        printf("cv: plik istnieje juz na dysku\n");
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -264,7 +268,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
     file_size = get_file_size(physical_handler);
     required_blocks = convert_size_to_blocks(file_size);
     if(required_blocks > pointers.superblock->free_dblocks){
-        printf("cp: niewystarczajaca ilosc miejsca na dysku(%dB)\n",pointers.superblock->free_dblocks*BLOCK_SIZE);
+        printf("cv: niewystarczajaca ilosc miejsca na dysku(%dB)\n",pointers.superblock->free_dblocks*BLOCK_SIZE);
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -272,14 +276,14 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
     }
     //Uaktualniamy bitmapy inode'ów
     if((inode_index = find_first_free_inode(&pointers)) == MAX_FILES_NUMBER){
-        printf("cp: brak wolnego miejsca na nowy plik - maksymalna ilosc inode'ow(%d)",MAX_FILES_NUMBER);
+        printf("cv: brak wolnego miejsca na nowy plik - maksymalna ilosc inode'ow(%d)",MAX_FILES_NUMBER);
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
         return errno;
     }
     if(((dblock_index = find_first_free_dblock(&pointers)) == pointers.superblock->dblock_count)&& required_blocks != 0){
-        printf("cp: brak wolnego miejsca na nowy plik - maksymalna ilosc dblockow(%d)",pointers.superblock->dblock_count);
+        printf("cv: brak wolnego miejsca na nowy plik - maksymalna ilosc dblockow(%d)",pointers.superblock->dblock_count);
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -296,7 +300,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
     //Wyszukujemy jego pozycję do zapisu i zapisujemy
     fseek(virtual_handler,calculate_inode_offset(inode_index, &pointers), SEEK_SET);
     if((fwrite(pointers.temp_inode,sizeof(INODE),1,virtual_handler))!= 1){
-        printf("cp: blad zapisania nowego inode'a\n");
+        printf("cv: blad zapisania nowego inode'a\n");
         fclose(virtual_handler);
         fclose(physical_handler);
         free_system_pointers(&pointers);
@@ -309,7 +313,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
 
     for(count = 0, total_blocks = required_blocks; count < total_blocks; ++count){
         if((fread(temp->data, BLOCK_SIZE, 1, physical_handler))!= 1 && !feof(physical_handler)){ //Odczytujemy blok danych do skopiowania
-            printf("cp: nie mozna odczytac danych z pliku\n");
+            printf("cv: nie mozna odczytac danych z pliku\n");
             fclose(virtual_handler);
             fclose(physical_handler);
             free_system_pointers(&pointers);
@@ -317,7 +321,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
             return errno;
         }
         if((dblock_index = find_first_free_dblock(&pointers)) == pointers.superblock->dblock_count){
-            printf("cp: brak wolnego miejsca na nowy plik - maksymalna ilosc dblockow(%d)",pointers.superblock->dblock_count);
+            printf("cv: brak wolnego miejsca na nowy plik - maksymalna ilosc dblockow(%d)",pointers.superblock->dblock_count);
             fclose(virtual_handler);
             fclose(physical_handler);
             free_system_pointers(&pointers);
@@ -338,7 +342,7 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
         //Wyszukujemy bloku danych na dysku do zapisania
         fseek(virtual_handler, calculate_dblock_offset(dblock_index, &pointers), SEEK_SET);
         if((fwrite(temp,sizeof(BLOCK),1,virtual_handler))!= 1){
-            printf("cp: blad w zapisaniu danych na dysku\n");
+            printf("cv: blad w zapisaniu danych na dysku\n");
             fclose(virtual_handler);
             fclose(physical_handler);
             free_system_pointers(&pointers);
@@ -353,33 +357,38 @@ int copy_to_virtual_disk(const char *filename, const char *virtual_disk_name){
     //Uaktualnianie superbloku
     pointers.superblock->full_dblocks += required_blocks;
     pointers.superblock->free_dblocks -= required_blocks;
+    pointers.superblock->used_space += file_size;
     update_disk_data(virtual_handler, &pointers);
 
     fclose(virtual_handler);
     fclose(physical_handler);
     free_system_pointers(&pointers);
     free(temp);
+    printf("skopiowano plik '%s'\n",filename);
     return 0;
 }
 
 int display_virtual_disk_info(char *filename) {
     SYSPOINT pointers;
     FILE *disk_handler;
+    WORD taken_inodes, i;
 
     if (!(disk_handler = fopen(filename, "rb"))) {
-        printf("Nie mozna otworzyc dysku '%s'\n", filename);
+        printf("i: blad przy otwieraniu dysku '%s'\n", filename);
         return errno;
     }
-
     allocate_system_pointers(disk_handler, &pointers);
-    printf("NAME:%s SIZE:%u INODES:%u DATA_BLOCKS:%u FREE_DATA_BLOCKS:%u FULL_DATA_BLOCKS:%u\n",
-           pointers.superblock->disk_name, pointers.superblock->size,
-           pointers.superblock->inode_count, pointers.superblock->dblock_count,
-           pointers.superblock->free_dblocks, pointers.superblock->full_dblocks);
-    int i = 0;
-    for(;i<MAX_FILES_NUMBER;++i){
-
+    for (i = 0, taken_inodes = 0; i < MAX_FILES_NUMBER; ++i){
+        if (pointers.inode_bmp[i] == 1){
+            ++taken_inodes;
+        }
     }
+
+    printf("NAZWA:%s \nROZMIAR:%u \nDOSTEPNE_MIEJSCE: %lu\nZAJETE_MIEJSCE:%lu \nPLIKI:%u \nMAX_PLIKOW:%u \nBLOKI_DANYCH:%u \nWOLNE_BLOKI_DANYCH:%u \nZAJETE_BLOKI_DANYCH:%u\n",
+           pointers.superblock->disk_name, pointers.superblock->size,BLOCK_SIZE*(unsigned long)pointers.superblock->dblock_count,
+           pointers.superblock->used_space,
+           taken_inodes,MAX_FILES_NUMBER, pointers.superblock->dblock_count,
+           pointers.superblock->free_dblocks, pointers.superblock->full_dblocks);
     free_system_pointers(&pointers);
     fclose(disk_handler);
     return 0;
@@ -388,27 +397,40 @@ int display_virtual_disk_info(char *filename) {
 int display_main_catalog(const char *filename){
     FILE *handler;
     SYSPOINT pointers;
-    WORD offset;
+    WORD offset, dblock_index, i, taken_inodes;
 
     if(!(handler = fopen(filename,"r+b"))){
-        printf("l: Blad otwierania pliku\n");
+        printf("ls: blad otwierania dysku\n");
         return errno;
     }
 
     if((allocate_system_pointers(handler, &pointers)) != 0){
-        printf("l: Blad czytania glownych struktur informacynych\n");
+        printf("ls: blad czytania glownych struktur informacynych\n");
         return errno;
     }
 
-    for(WORD i = 0; i < MAX_FILES_NUMBER; ++i){
+    for (i = 0, taken_inodes = 0; i < MAX_FILES_NUMBER; ++i){
+        if (pointers.inode_bmp[i] == 1){
+            ++taken_inodes;
+        }
+    }
+    printf("Ilosc plikow: %u/%d\n",taken_inodes,MAX_FILES_NUMBER);
+
+    for(i = 0; i < MAX_FILES_NUMBER; ++i){
         if(pointers.inode_bmp[i] == 1){
             offset = calculate_inode_offset(i, &pointers);
             fseek(handler, offset, SEEK_SET);
             if(fread(pointers.temp_inode, sizeof(INODE), 1, handler) != 1){
-                printf("l: Odczytanie inode'a nie udalo sie\n");
+                printf("ls: odczytanie inode'a nie udalo sie\n");
                 return errno;
             }
-            printf("N[%s]:S[%lu]:DbI[%u]\t", pointers.temp_inode->name, pointers.temp_inode->size, pointers.temp_inode->dblock_index);
+            if(!(i%3)) printf("\n");
+            dblock_index = pointers.temp_inode->dblock_index;
+            printf("N[%s]:S[%luB]", pointers.temp_inode->name, pointers.temp_inode->size);
+            if(dblock_index == pointers.superblock->dblock_count)
+                printf(":DbI[-]\t");
+            else
+                printf(":DbI[%u]\t", dblock_index);
         }
     }
     printf("\n");
@@ -422,6 +444,7 @@ int delete_file(const char *filename, const char *virtual_disk_name){
     SYSPOINT pointers;
     BLOCK *temp_block;
     WORD inode_index, dblock_index, i;
+    unsigned long file_size;
 
     if(!(handler = fopen(virtual_disk_name, "r+b"))){
         printf("rm: blad otwierania bazy danych\n");
@@ -450,7 +473,7 @@ int delete_file(const char *filename, const char *virtual_disk_name){
     rewind(handler);
     //Zaznaczamy na bitmapie inode'ow ze inode jest wolny
     pointers.inode_bmp[inode_index] = 0;
-
+    file_size = pointers.temp_inode->size;
     //Czytamy gdzie zaczynaja się dane tego pliku
     dblock_index = pointers.temp_inode->dblock_index;
 
@@ -470,23 +493,23 @@ int delete_file(const char *filename, const char *virtual_disk_name){
         pointers.superblock->free_dblocks++;
         pointers.superblock->full_dblocks--;
     }
-
+    pointers.superblock->used_space-=file_size;
     update_disk_data(handler, &pointers);
 
     free(temp_block);
     fclose(handler);
     free_system_pointers(&pointers);
-    printf("rm: plik usunieto\n");
+    printf("usunieto plik '%s'\n", filename);
     return 0;
 }
 
 int delete_virtual_disk(const char *filename){
     if (unlink(filename) == -1){
-        printf("Blad usuwania systemu plikow.\n");
+        printf("dt: blad usuwania dysku\n");
         return errno;
     }
 
-    printf("Dysk wirtualny '%s' zostal usuniety.\n",filename);
+    printf("Dysk wirtualny '%s' zostal usuniety\n",filename);
 
     return 0;
 }
@@ -494,32 +517,119 @@ int delete_virtual_disk(const char *filename){
 int map_virtual_disk(const char *filename){
     FILE *handler;
     SYSPOINT pointers;
-    int i, free_inodes;
+    int i, current_state, current_count, start_adress;
 
     if(!(handler = fopen(filename, "rb"))){
-        printf("m: Blad podczas otwierania pliku\n");
+        printf("mp: blad podczas otwierania dysku\n");
         return errno;
     }
     if((allocate_system_pointers(handler, &pointers))!=0){
         fclose(handler);
-        printf("m: Blad podczas czytania pliku\n");
+        printf("mp: Blad podczas czytania struktur informacyjnych\n");
         return -1;
     }
-
-    for (i = 0, free_inodes = 0; i < MAX_FILES_NUMBER; ++i){
-        if (pointers.inode_bmp[i] == 0){
-            ++free_inodes;
+    printf("ADRESS    |    SIZE    |    COUNT    |    STATUS    |    TYPE           |\n");
+    printf("%10i|%12zu|%13d|          full|   superblock\n", 0, sizeof(SUPERBLOCK), 1);
+    for(i = 0, current_state = pointers.inode_bmp[0], current_count = 0, start_adress =INODE_BMP_ADRESS;
+        i < MAX_FILES_NUMBER; ++i){
+       if(pointers.inode_bmp[i] != current_state){
+           if(current_state == 0){
+               printf("%10d|%12zu|%13d|          free|   inode bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+               start_adress+=current_count;
+               current_count = 1;
+               current_state = 1;
+           }else{
+               printf("%10d|%12zu|%13d|         taken|   inode bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+               start_adress+=current_count;
+               current_count = 1;
+               current_state = 0;
+           }
+       }else{
+           ++current_count;
+       }
+        if(i+1 == MAX_FILES_NUMBER){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   inode bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   inode bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+            }
         }
     }
-
-    printf("OFFSET    |    SIZE    |    COUNT    |    STATUS    |    TYPE    |\n");
-    printf("%10i|%12zu|%13d|          full|  superblock\n", 0, sizeof(SUPERBLOCK), 1);
-    printf("%10zu|%12zu|%13d|          ----|inode bitmap\n", INODE_BMP_ADRESS, sizeof(char)*MAX_FILES_NUMBER, MAX_FILES_NUMBER);
-    printf("%10zu|%12zu|%13d|          ----|block bitmap\n", DBLOCKS_BMP_ADRESS, sizeof(char)*pointers.superblock->dblock_count, pointers.superblock->dblock_count);
-    printf("%10i|%12zu|%13d|          free|      inodes\n", calculate_inode_offset(find_first_free_inode(&pointers), &pointers), free_inodes*sizeof(INODE), free_inodes);
-    printf("%10i|%12zu|%13d|          full|      inodes\n", calculate_inode_offset(find_first_taken_inode(&pointers), &pointers), (MAX_FILES_NUMBER - free_inodes) * sizeof(INODE), MAX_FILES_NUMBER - free_inodes);
-    printf("%10i|%12zu|%13d|          free| data blocks\n", calculate_dblock_offset(find_first_free_dblock(&pointers), &pointers),pointers.superblock->free_dblocks*sizeof(BLOCK), pointers.superblock->free_dblocks);
-    printf("      ----|%12zu|%13d|          full| data blocks\n\n", sizeof(BLOCK)*(pointers.superblock->full_dblocks), pointers.superblock->full_dblocks);
+    for(i = 0, current_state = pointers.dblocks_bmp[0], current_count = 0, start_adress = DBLOCKS_BMP_ADRESS;
+        i < pointers.superblock->dblock_count; ++i){
+        if(pointers.dblocks_bmp[i] != current_state){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   dblocks bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+                start_adress+=current_count;
+                current_count = 1;
+                current_state = 1;
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   dblocks bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+                start_adress+=current_count;
+                current_count = 1;
+                current_state = 0;
+            }
+        }else{
+            ++current_count;
+        }
+        if(i+1 == pointers.superblock->dblock_count){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   dblocks bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   dblocks bitmap\n", start_adress, sizeof(char)*current_count, current_count);
+            }
+        }
+    }
+    for(i = 0, current_state = pointers.inode_bmp[0], current_count = 0, start_adress =calculate_inode_offset(0, &pointers);
+        i < MAX_FILES_NUMBER; ++i){
+        if(pointers.inode_bmp[i] != current_state){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   inodes\n", start_adress, sizeof(INODE)*current_count, current_count);
+                start_adress+=current_count*sizeof(INODE);
+                current_count = 1;
+                current_state = 1;
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   inodes\n", start_adress, sizeof(INODE)*current_count, current_count);
+                start_adress+=current_count*sizeof(INODE);
+                current_count = 1;
+                current_state = 0;
+            }
+        }else{
+            ++current_count;
+        }
+        if(i+1 == MAX_FILES_NUMBER){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   inodes\n", start_adress, sizeof(INODE)*current_count, current_count);
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   inodes\n", start_adress, sizeof(INODE)*current_count, current_count);
+            }
+        }
+    }
+    for(i = 0, current_state = pointers.dblocks_bmp[0], current_count = 0, start_adress =calculate_dblock_offset(0, &pointers);
+        i < pointers.superblock->dblock_count; ++i){
+        if(pointers.dblocks_bmp[i] != current_state){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   dblocks\n", start_adress, sizeof(BLOCK)*current_count, current_count);
+                start_adress+=current_count*sizeof(BLOCK);
+                current_count = 1;
+                current_state = 1;
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   dblocks\n", start_adress, sizeof(BLOCK)*current_count, current_count);
+                start_adress+=current_count*sizeof(BLOCK);
+                current_count = 1;
+                current_state = 0;
+            }
+        }else{
+            ++current_count;
+        }
+        if(i+1 == pointers.superblock->dblock_count){
+            if(current_state == 0){
+                printf("%10d|%12zu|%13d|          free|   dblocks\n", start_adress, sizeof(BLOCK)*current_count, current_count);
+            }else{
+                printf("%10d|%12zu|%13d|         taken|   dblocks\n", start_adress, sizeof(BLOCK)*current_count, current_count);
+            }
+        }
+    }
 
     free_system_pointers(&pointers);
     fclose(handler);
