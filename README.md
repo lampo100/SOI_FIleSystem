@@ -1,9 +1,9 @@
 ## SOI_FileSystem
 #Implementacja  
 Tworzony dysk wirtualny składa się z dwóch obszarów. Obszaru informacyjnego który zawiera różne informacje służące do zarządzania dyskiem takie jak:  
-*Rozmiar dysku
-*Obecną zajętość
-*Które bloki danych są zajęte a które wolne itp.  
+1. Rozmiar dysku
+2. Obecną zajętość
+3. Które bloki danych są zajęte a które wolne itp.  
 Drugim obszarem jest obszar danych w którym znajdują się bloki danych o stałym rozmiarze przechowujące bufor na dane użytkownika, a także indeks kolejnego bloku danego pliku.  
 Pamięć na pliki alokowana jest w sposób listowy, przez co występuje fragmentacja wewnętrzna, jednakże nie występuje fragmentacja zewnętrzna.  
 
