@@ -1,5 +1,5 @@
-## SOI_FileSystem
-#Implementacja  
+# SOI_FileSystem
+## Implementacja  
 Tworzony dysk wirtualny składa się z dwóch obszarów. Obszaru informacyjnego który zawiera różne informacje służące do zarządzania dyskiem takie jak:  
 1. Rozmiar dysku  
 2. Obecną zajętość  
@@ -7,7 +7,7 @@ Tworzony dysk wirtualny składa się z dwóch obszarów. Obszaru informacyjnego 
 Drugim obszarem jest obszar danych w którym znajdują się bloki danych o stałym rozmiarze przechowujące bufor na dane użytkownika, a także indeks kolejnego bloku danego pliku.  
 Pamięć na pliki alokowana jest w sposób listowy, przez co występuje fragmentacja wewnętrzna, jednakże nie występuje fragmentacja zewnętrzna.  
 
-#Komendy
+## Komendy
 	./FileSystem OPCJA [DYSK] [ARGUMENT]  
 OPIS  
 	Program wykonujacy rozne czynnosci zwiazanie z tworzeniem i zarzadzaniem dyskami wirtualnymi.  
@@ -29,8 +29,8 @@ OPIS
 -i  
 	Wyswietl ogolne parametry dysku  
 
-#Ćwiczenie 6
-#Konstrukcja systemu plików
+# Ćwiczenie 6
+# Konstrukcja systemu plików
 
 1. Cel ćwiczenia
 
